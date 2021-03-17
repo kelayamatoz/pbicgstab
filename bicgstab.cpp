@@ -144,7 +144,7 @@ static void gpu_pbicgstab(cublasHandle_t cublasHandle, cusparseHandle_t cusparse
         checkCudaErrors(cublasDaxpy(cublasHandle, m, &negalpha, Ap_j, 1, r_j_buff, 1));
         double *s_j = r_j_buff;
 
-        // Step 6, Algo 2.3: ω_j =((Asj)·sj) / ((Asj)·(Asj)) 
+        // Step 6, Algo 2.3: ω_j =((Asj)·sj) / ((Asj)·(Asj))
         double Asj_dot_Asj = 0.0;
         double Asj_dot_sj = 0.0;
         checkCudaErrors(cusparseDcsrmv(cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE, n, n, nnz, &one, descra, a, ia, ja, s_j, &zero, As_j));
@@ -157,12 +157,12 @@ static void gpu_pbicgstab(cublasHandle_t cublasHandle, cusparseHandle_t cusparse
         checkCudaErrors(cublasDaxpy(cublasHandle, n, &alpha_j, p_j, 1, x_j, 1));
         checkCudaErrors(cublasDaxpy(cublasHandle, n, &omega_j, s_j, 1, x_j, 1));
 
-        // Step 8, Algo 2.3: r_j+1 = −ω_j * As_j + s_j 
+        // Step 8, Algo 2.3: r_j+1 = −ω_j * As_j + s_j
         double negomega = -omega_j;
         checkCudaErrors(cublasDaxpy(cublasHandle, m, &negomega, As_j, 1, s_j, 1));
         double *r_j_plus_1 = s_j;
 
-        // Step 9, 10, 11, Algo 2.3: 
+        // Step 9, 10, 11, Algo 2.3:
         // 9: if ||rj+1||<ε0 then
         // 10: Break;
         // 11: end if
@@ -186,7 +186,7 @@ static void gpu_pbicgstab(cublasHandle_t cublasHandle, cusparseHandle_t cusparse
         checkCudaErrors(cublasDaxpy(cublasHandle, n, &neg_betaj_omegaj, Ap_j, 1, p_j, 1));
         checkCudaErrors(cublasDaxpy(cublasHandle, n, &one, r_j_plus_1, 1, p_j, 1));
 
-        // Step 14, 15, update x to x+1 and r to r+1. It seems that x is already updated at Step 7? 
+        // Step 14, 15, update x to x+1 and r to r+1. It seems that x is already updated at Step 7?
         // Hence I only need to update r to r+1.
         checkCudaErrors(cublasDcopy(cublasHandle, n, r_j_plus_1, 1, r_j, 1));
     }

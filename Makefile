@@ -289,10 +289,10 @@ endif
 mmio.c.o:mmio.c
 	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
-pbicgstab.o:pbicgstab.cpp
+bicgstab.o:bicgstab.cpp
 	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
-BiCGStab: mmio.c.o pbicgstab.o
+BiCGStab: mmio.c.o bicgstab.o
 	$(EXEC) $(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $+ $(LIBRARIES)
 	$(EXEC) mkdir -p ../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
 	$(EXEC) cp $@ ../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
@@ -301,7 +301,7 @@ run: build
 	$(EXEC) ./BiCGStab
 
 clean:
-	rm -f BiCGStab mmio.c.o pbicgstab.o
+	rm -f BiCGStab mmio.c.o bicgstab.o
 	rm -rf ../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)/BiCGStab
 
 clobber: clean

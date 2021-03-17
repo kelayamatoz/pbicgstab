@@ -501,13 +501,15 @@ int test_bicgstab(char * matrix_filename, char * coloring_filename,
     /* run the test */
     num_iterations=1; //10; 
     start = second()/num_iterations;
+    /* create a buffer between iters */
     for (count=0; count<num_iterations; count++) {
         
         gpu_pbicgstab(cublasHandle, cusparseHandle, matrixM, matrixN, nnz,
                               descra, devPtrAval, devPtrArowsIndex, devPtrAcolsIndex,
                               descrm, devPtrMval, devPtrMrowsIndex, devPtrMcolsIndex,
                               info_l, info_u,
-                              devPtrF,devPtrR,devPtrRW,devPtrP,devPtrPW,devPtrS,devPtrT,devPtrV,devPtrX, maxit, tol, ttt_sv);
+                              devPtrF,devPtrR,devPtrRW,devPtrP,devPtrPW,devPtrS,devPtrT,devPtrV,devPtrX, 
+                              maxit, tol, ttt_sv);
 
         checkCudaErrors(cudaDeviceSynchronize());
     }

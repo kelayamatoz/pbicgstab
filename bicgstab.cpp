@@ -119,7 +119,7 @@ static void gpu_pbicgstab(cublasHandle_t cublasHandle, cusparseHandle_t cusparse
     //WARNING: Analysis is done outside of the function (and the time taken by it is passed to the function in variable ttt_sv)
 
     //compute initial residual r0=b-Ax0 (using initial guess in x)
-    checkCudaErrors(cusparseDcsrmv(cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE, n, n, nnz, &one, descra, a, ia, ja, x, &zero, r_j));
+    checkCudaErrors(cusparseDcsrmv(cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE, n, n, nnz, &one, descra, a, ia, ja, x_j, &zero, r_j));
     checkCudaErrors(cublasDscal(cublasHandle, n, &mone, r_j, 1));
     checkCudaErrors(cublasDaxpy(cublasHandle, n, &one, f, 1, r_j, 1));
 
@@ -141,7 +141,7 @@ static void gpu_pbicgstab(cublasHandle_t cublasHandle, cusparseHandle_t cusparse
         // Step 5, Algo 2.3: s_j = r_j − α_j dot Apj
         double negalpha = -alpha_j;
         double *negalpha_Ap_j = Ap_j;
-        checkCudaErrors(cublasDaxpy(cublasHandle, m, &negalpha, Ap_j, 1, r_j_buff, 1))
+        checkCudaErrors(cublasDaxpy(cublasHandle, m, &negalpha, Ap_j, 1, r_j_buff, 1));
         double *s_j = r_j_buff;
 
         // Step 6, Algo 2.3: ω_j =((Asj)·sj) / ((Asj)·(Asj)) 
@@ -166,7 +166,7 @@ static void gpu_pbicgstab(cublasHandle_t cublasHandle, cusparseHandle_t cusparse
         // 9: if ||rj+1||<ε0 then
         // 10: Break;
         // 11: end if
-        checkCudaErrors(cublasDnrm2(cublasHandle, r_j_plus_1, 1, &nrmr));
+        checkCudaErrors(cublasDnrm2(cublasHandle, n, r_j_plus_1, 1, &nrmr));
         if (nrmr < tol) {
             break;
         }
@@ -176,7 +176,7 @@ static void gpu_pbicgstab(cublasHandle_t cublasHandle, cusparseHandle_t cusparse
         double one_div_rj_dot_r0prime = 1.0 / rj_dot_r0prime;
         double temp_s12 = 0.0;
         checkCudaErrors(cublasDdot(cublasHandle, n, r_j_plus_1, 1, r_0_prime, 1, &temp_s12));
-        double beta_j = alphaj_div_omegaj * temp_s12 * one_div_rj_dot_r0prime
+        double beta_j = alphaj_div_omegaj * temp_s12 * one_div_rj_dot_r0prime;
 
         // Step 13, Algo 2.3: p_(j+1) = r_(j+1) + β_j * (p_j −ω_j * Ap_j)
         //                            = r_(j+1) + β_j * p_j - β_j * ω_j * Ap_j
@@ -188,7 +188,7 @@ static void gpu_pbicgstab(cublasHandle_t cublasHandle, cusparseHandle_t cusparse
 
         // Step 14, 15, update x to x+1 and r to r+1. It seems that x is already updated at Step 7? 
         // Hence I only need to update r to r+1.
-        checkCudaError(cublasDcopy(cublasHandle, n, r_j_plus_1, 1, r_j, 1));
+        checkCudaErrors(cublasDcopy(cublasHandle, n, r_j_plus_1, 1, r_j, 1));
     }
 }
 

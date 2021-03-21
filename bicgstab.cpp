@@ -4,6 +4,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <cuda_runtime.h>
+#include <cuda_runtime_api.h>
 
 #include "cublas_v2.h"
 #include "cusparse_v2.h"
@@ -18,21 +19,126 @@ static void bicgstab(cublasHandle_t cublasHandle, cusparseHandle_t cusparseHandl
                      int m, int n, int nnz,
                      const cusparseMatDescr_t descra,
                      double *a, int *ia, int *ja,
-                     double *x, double *b, double *r, double *result,
+                     double *x, double *b, double *r,
+                     double *r0_prime, double *r_j, double *p_j, double *Ap_j, double *r_j_buff, double *As_j, double *r0_prime_copy,
                      int maxit)
 {
     double zero = 0.0;
     double one = 1.0;
     double mone = -1.0;
-    // checkCudaErrors(
-    //     cublasDcopy(cublasHandle, n, x, 1, result, 1)
-    // );
+    double nrmr = 0.0;
+    double tol = -1.0; // TODO: Change it to something different if I need to run multiple iters.
+    // r0 = b - A @ x
     checkCudaErrors(
         cusparseDcsrmv(
             cusparseHandle,
             CUSPARSE_OPERATION_NON_TRANSPOSE,
             n, n, nnz, &one, descra,
-            a, ia, ja, x, &zero, result));
+            a, ia, ja, x, &zero, r));
+    checkCudaErrors(
+        cublasDscal(
+            cublasHandle,
+            n, &mone, r, 1));
+    checkCudaErrors(
+        cublasDaxpy(
+            cublasHandle,
+            n, &one, b, 1, r, 1));
+
+    checkCudaErrors(
+        cublasDcopy(
+            cublasHandle,
+            n, r, 1, r0_prime, 1));
+
+    checkCudaErrors(
+        cublasDcopy(
+            cublasHandle,
+            n, r, 1, r0_prime_copy, 1));
+
+    checkCudaErrors(
+        cublasDcopy(
+            cublasHandle,
+            n, r, 1, r0_prime, 1));
+    checkCudaErrors(
+        cublasDcopy(
+            cublasHandle,
+            n, r, 1, r_j, 1));
+    checkCudaErrors(
+        cublasDcopy(
+            cublasHandle,
+            n, r, 1, p_j, 1));
+
+    // Step 4, Algo 2.3: α_j = (r_j ·r′0)/((Ap_j)·r′0)
+    double alpha_j;
+    double rj_dot_r0prime = 0.0;
+    double Apj_dot_r0prime = 0.0;
+    checkCudaErrors(
+        cublasDdot(
+            cublasHandle, n, r_j, 1, r0_prime, 1, &rj_dot_r0prime));
+    checkCudaErrors(
+        cusparseDcsrmv(
+            cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+            n, n, nnz, &one, descra, a, ia, ja, p_j, &zero, Ap_j));
+
+    checkCudaErrors(
+        cublasDdot(
+            cublasHandle, n, r0_prime, 1, Ap_j, 1, &Apj_dot_r0prime));
+    alpha_j = rj_dot_r0prime / Apj_dot_r0prime;
+
+    // Step 5, Algo 2.3: s_j = r_j − α_j dot Apj
+    // TODO: Noticing that I'm using r0_prime to replace rj_buff.
+    //  If we want to do multiple iterations, we need to find a way to handle rj_buff correctly.
+    double negalpha = -alpha_j;
+    double *negalpha_Ap_j = Ap_j;
+    checkCudaErrors(
+        cublasDaxpy(
+            cublasHandle, m, &negalpha, Ap_j, 1, r0_prime, 1));
+    double *s_j = r0_prime;
+
+    // Step 6, Algo 2.3: ω_j =((Asj)·sj) / ((Asj)·(Asj))
+    double Asj_dot_Asj = 0.0;
+    double Asj_dot_sj = 0.0;
+    checkCudaErrors(
+        cusparseDcsrmv(
+            cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+            n, n, nnz, &one, descra, a, ia, ja, s_j, &zero, As_j));
+    checkCudaErrors(cublasDdot(cublasHandle, m, As_j, 1, As_j, 1, &Asj_dot_Asj));
+    checkCudaErrors(cublasDdot(cublasHandle, m, As_j, 1, s_j, 1, &Asj_dot_sj));
+    double omega_j = Asj_dot_sj / Asj_dot_Asj;
+
+    // Step 7, Algo 2.3: x_j+1 = x_j + α_j * p_j + ω_j * s_j
+    checkCudaErrors(cublasDaxpy(cublasHandle, n, &alpha_j, p_j, 1, x, 1));
+    checkCudaErrors(cublasDaxpy(cublasHandle, n, &omega_j, s_j, 1, x, 1));
+
+    // Step 8, Algo 2.3: r_j+1 = −ω_j * As_j + s_j
+    double negomega = -omega_j;
+    checkCudaErrors(cublasDaxpy(cublasHandle, m, &negomega, As_j, 1, s_j, 1));
+    double *r_j_plus_1 = s_j;
+
+    // Step 9, 10, 11, Algo 2.3:
+    // 9: if ||rj+1||<ε0 then
+    // 10: Break;
+    // 11: end if
+    checkCudaErrors(cublasDnrm2(cublasHandle, n, r_j_plus_1, 1, &nrmr));
+    if (nrmr < tol)
+    {
+        return;
+    }
+
+    // Step 12, Algo 2.3: β_j = (α_j / ω_j) × (r_(j+1) · r′0 )/(rj·r′0)
+    double alphaj_div_omegaj = alpha_j / omega_j;
+    double one_div_rj_dot_r0prime = 1.0 / rj_dot_r0prime;
+    double temp_s12 = 0.0;
+    checkCudaErrors(
+        cublasDdot(cublasHandle, n, r_j_plus_1, 1, r0_prime_copy, 1, &temp_s12));
+    double beta_j = alphaj_div_omegaj * temp_s12 * one_div_rj_dot_r0prime;
+
+    // Step 13, Algo 2.3: p_(j+1) = r_(j+1) + β_j * (p_j −ω_j * Ap_j)
+    //                            = r_(j+1) + β_j * p_j - β_j * ω_j * Ap_j
+    //                            = r_(j+1) + (- β_j * ω_j * Ap_j) + β_j * p_j  ***
+    double neg_betaj_omegaj = -beta_j * omega_j;
+    checkCudaErrors(cublasDscal(cublasHandle, n, &beta_j, p_j, 1));
+    checkCudaErrors(cublasDaxpy(cublasHandle, n, &neg_betaj_omegaj, Ap_j, 1, p_j, 1));
+    checkCudaErrors(cublasDaxpy(cublasHandle, n, &one, r_j_plus_1, 1, p_j, 1));
 }
 
 int main(int argc, char *argv[])
@@ -131,7 +237,6 @@ int main(int argc, char *argv[])
     }
     printf("^^^^ M=%d, N=%d, nnz=%d\n", matrixM, matrixN, nnz);
 
-
     // TODO: This is probably going to cause a memory leak, but I don't really care at this point...
     // fix it later definitely!
 
@@ -177,6 +282,13 @@ int main(int argc, char *argv[])
     double *devX = 0;
     double *devR = 0;
     double *devB = 0;
+    double *devR0_prime = 0;
+    double *devR0_prime_copy = 0;
+    double *devR_j = 0;
+    double *devP_j = 0;
+    double *devAp_j = 0;
+    double *devR_j_buff = 0;
+    double *devAs_j = 0;
     double *devResult = 0;
     double *devAval = 0;
     int *devAcolsIndex = 0;
@@ -185,8 +297,14 @@ int main(int argc, char *argv[])
     // Allocating device memories
     cudaMalloc((void **)&devX, sizeof(double) * arraySizeX);
     cudaMalloc((void **)&devR, sizeof(double) * arraySizeR);
+    cudaMalloc((void **)&devR0_prime, sizeof(double) * arraySizeR);
+    cudaMalloc((void **)&devR0_prime_copy, sizeof(double) * arraySizeR);
+    cudaMalloc((void **)&devR_j, sizeof(double) * arraySizeR);
+    cudaMalloc((void **)&devP_j, sizeof(double) * arraySizeR);
     cudaMalloc((void **)&devB, sizeof(double) * arraySizeX);
+    cudaMalloc((void **)&devAp_j, sizeof(double) * arraySizeR);
     cudaMalloc((void **)&devResult, sizeof(double) * arraySizeX);
+    cudaMalloc((void **)&devAs_j, sizeof(double) * arraySizeR);
     cudaMalloc((void **)&devAval, sizeof(double) * matrixSizeAval);
     cudaMalloc((void **)&devAcolsIndex, sizeof(double) * matrixSizeAcolsIndex);
     cudaMalloc((void **)&devArowsIndex, sizeof(double) * matrixSizeArowsIndex);
@@ -201,31 +319,22 @@ int main(int argc, char *argv[])
 
     /*************** Kernel *********************/
     // TODO: This is where the kernel should stay!
-    // Checking if A is read correctly...
-
-    // printf("ia val = \n");
-    // for (int i = 0; i < 901; i ++)
-    // {
-    //     printf("%d, \n", ArowsIndex[i]);
-    // }
     printf("matrixSizeAcolsIndex = %d, matrixSizeArowsIndex = %d", matrixSizeAcolsIndex, matrixSizeArowsIndex);
-
     bicgstab(cublasHandle, cusparseHandle,
              matrixM, matrixN, matrixSizeAval,
              descra,
              devAval, devArowsIndex, devAcolsIndex,
-             devX, devB, devR, devResult,
+             devX, devB, devR,
+             devR0_prime, devR_j, devP_j, devAp_j, devR_j_buff, devAs_j, devR0_prime_copy,
              maxit);
-
-    checkCudaErrors(cudaMemcpy(result, devResult, (size_t)(arraySizeX * sizeof(double)), cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaMemcpy(result, devX, (size_t)(arraySizeX * sizeof(double)), cudaMemcpyDeviceToHost));
     /********************************************/
     // Cleanup host
-    // printf("checking result of residual\n");
-    // for (int i = 0; i < arraySizeX; i++)
-    // {
-    //     printf("%f, ", result[i]);
-    // }
-
+    printf("checking result of x\n");
+    for (int i = 0; i < arraySizeX; i++)
+    {
+        printf("%f, ", result[i]);
+    }
     free(result);
     free(x);
     free(r);
@@ -241,6 +350,13 @@ int main(int argc, char *argv[])
     cudaFree(devAval);
     cudaFree(devAcolsIndex);
     cudaFree(devArowsIndex);
+    cudaFree(devR0_prime);
+    cudaFree(devR0_prime_copy);
+    cudaFree(devR_j);
+    cudaFree(devP_j);
+    cudaFree(devAp_j);
+    cudaFree(devAs_j);
+    cudaFree(devR_j_buff);
     // Destroy handles
     cudaStreamDestroy(stream);
     cublasDestroy(cublasHandle);

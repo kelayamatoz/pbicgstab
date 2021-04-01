@@ -1,1 +1,1 @@
-time OMP_NUM_THREADS=8 ./matmuladd_omp
+OMP_NUM_THREADS=8 ./bicgstab_omp -F$1

@@ -1,4 +1,4 @@
-APP=bicgstab
+APP=bicgstab_no_preconditioning
 
 omp:
 	g++ -I ../eigen/ -fopenmp ${APP}.cpp -o ${APP}_omp

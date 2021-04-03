@@ -79,11 +79,21 @@ int main(int argc, char **argv)
 
   argc = temp_argc;
   SMatrixXf A;
+  bool iscomplex=false, isvector=false;
+  int sym;
   Eigen::loadMarket(A, matrix_filename);
+  getMarketHeader(matrix_filename, sym, iscomplex, isvector);
+  if (iscomplex) { std::cout<< " Not for complex matrices \n"; return -1; }
+  if (isvector) { std::cout << "The provided file is not a matrix file\n"; return -1;}
+  if (sym != 0) { // symmetric matrices, only the lower part is stored
+    SparseMatrix<float, Eigen::RowMajor> temp; 
+    temp = A;
+    A = temp.selfadjointView<Lower>();
+  }
   int m = A.rows();
   int n = A.cols();
   int nnz = A.nonZeros();
-  printf("m = %d, n = %d\n", m, n);
+  printf("m = %d, n = %d, nnz = %d\n", m, n, nnz);
   VectorXf x = VectorXf::Ones(n) * 0.1;
   VectorXf b = VectorXf::Ones(m) * 0.2;
 

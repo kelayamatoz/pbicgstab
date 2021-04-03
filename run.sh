@@ -1,1 +1,1 @@
-OMP_NUM_THREADS=8 ./bicgstab_omp -F$1
+OMP_NUM_THREADS=64 ./bicgstab_no_preconditioning_omp -F$1

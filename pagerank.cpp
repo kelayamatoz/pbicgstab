@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <cuda_runtime.h>
 #include <helper_cuda.h>
+#include <helper_cusolver.h>
 #include "mmio.h"
 #include "mmio_wrapper.h"
 #include "nvgraph.h"
@@ -77,7 +78,10 @@ int main(int argc, char **argv)
     int maxit = 1;
     int starting_idx = 0;
     double tol = 0.0000001;
-    double damping = 0.75;
+    double damping = 0.85;
+    const int vertex_numsets = 2, edge_numsets = 1;
+    const float alpha1 = 0.85;
+    const void *alpha1_p = (const void *)&alpha1;
 
     printf("WARNING: it is assumed that the matrices are stores in Matrix Market format with double as elementtype\n Usage: ./BiCGStab -F[matrix.mtx] [-E] [-D]\n");
 
@@ -186,12 +190,6 @@ int main(int argc, char **argv)
     }
     printf("^^^^ base=%d, M=%d, N=%d, nnz=%d\n", base, m, n, nnz);
 
-    // Debugging...
-    n = 6;
-    nnz = 10;
-    const int vertex_numsets = 2, edge_numsets = 1;
-    const float alpha1 = 0.85;
-    const void *alpha1_p = (const void *)&alpha1;
     int i, *destination_offsets_h, *source_indices_h;
     float *weights_h, *bookmark_h, *pr_1;
     void **vertex_dim;
@@ -224,9 +222,9 @@ int main(int argc, char **argv)
     }
 
     // Allocate host data
-    destination_offsets_h = (int *)malloc((n + 1) * sizeof(int));
-    source_indices_h = (int *)malloc(nnz * sizeof(int));
-    weights_h = (float *)malloc(nnz * sizeof(float));
+    destination_offsets_h = indptr;
+    source_indices_h = indices;
+    weights_h = weights;
     bookmark_h = (float *)malloc(n * sizeof(float));
     pr_1 = (float *)malloc(n * sizeof(float));
     vertex_dim = (void **)malloc(vertex_numsets * sizeof(void *));
@@ -237,54 +235,15 @@ int main(int argc, char **argv)
     vertex_dim[0] = (void *)bookmark_h;
     vertex_dim[1] = (void *)pr_1;
     vertex_dimT[0] = CUDA_R_32F;
-    vertex_dimT[1] = CUDA_R_32F,
+    vertex_dimT[1] = CUDA_R_32F;
 
-    // weights_h = weights;
-    // destination_offsets_h = indptr;
-    // source_indices_h = indices;
-
-    weights_h [0] = 0.333333f;
-    weights_h [1] = 0.500000f;
-    weights_h [2] = 0.333333f;
-    weights_h [3] = 0.500000f;
-    weights_h [4] = 0.500000f;
-    weights_h [5] = 1.000000f;
-    weights_h [6] = 0.333333f;
-    weights_h [7] = 0.500000f;
-    weights_h [8] = 0.500000f;
-    weights_h [9] = 0.500000f;
-
-    destination_offsets_h [0] = 0;
-    destination_offsets_h [1] = 1;
-    destination_offsets_h [2] = 3;
-    destination_offsets_h [3] = 4;
-    destination_offsets_h [4] = 6;
-    destination_offsets_h [5] = 8;
-    destination_offsets_h [6] = 10;
-
-    source_indices_h [0] = 2;
-    source_indices_h [1] = 0;
-    source_indices_h [2] = 2;
-    source_indices_h [3] = 0;
-    source_indices_h [4] = 4;
-    source_indices_h [5] = 5;
-    source_indices_h [6] = 2;
-    source_indices_h [7] = 3;
-    source_indices_h [8] = 3;
-    source_indices_h [9] = 4;
-
-    bookmark_h[0] = 0.0f;
-    bookmark_h[1] = 1.0f;
-    bookmark_h[2] = 0.0f;
-    bookmark_h[3] = 0.0f;
-    bookmark_h[4] = 0.0f;
-    bookmark_h[5] = 0.0f;
-
-    for (int i = 0; i < n; i++)
+    weights_h = weights;
+    destination_offsets_h = indptr;
+    source_indices_h = indices;
+    for (int i = 0; i < n; i ++)
     {
         bookmark_h[i] = 0.0f;
     }
-
     bookmark_h[starting_idx] = 1.0f;
 
     // Starting nvgraph
@@ -305,14 +264,19 @@ int main(int argc, char **argv)
     check_status(nvgraphSetEdgeData(handle, graph, (void *)weights_h, 0));
 
     // First run with default values
-    check_status(nvgraphPagerank(handle, graph, 0, alpha1_p, 0, 0, 1, 0.0f, 0));
+    // I know that my implementation is not going to converge so all is fine...
+
+    double start_kernel = second();
+    nvgraphPagerank(handle, graph, 0, alpha1_p, 0, 0, 1, 0.1f, 1);
+    double end_kernel = second();
+    fprintf(stdout, "pagerank kernel done, time(ms) = %10.8f\n", (end_kernel - start_kernel) * 1000);
 
     // Get and print result
     check_status(nvgraphGetVertexData(handle, graph, vertex_dim[1], 1));
-    printf("pr_1, alpha = 0.85\n");
-    for (i = 0; i < n; i++)
-        printf("%f\n", pr_1[i]);
-    printf("\n");
+    // printf("pr_1, alpha = 0.85\n");
+    // for (i = 0; i < n; i++)
+    //     printf("%f\n", pr_1[i]);
+    // printf("\n");
 
     //Clean
     check_status(nvgraphDestroyGraphDescr(handle, graph));

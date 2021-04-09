@@ -45,7 +45,7 @@ int main(int argc, char **argv)
     double damping = 0.85;
     const int vertex_numsets = 2, edge_numsets = 1;
     int source_vert = 0;
-    printf("WARNING: it is assumed that the matrices are stores in Matrix Market format with double as elementtype\n Usage: ./pagerank -F[matrix.mtx]\n");
+    printf("WARNING: it is assumed that the matrices are stores in Matrix Market format with double as elementtype\n Usage: ./sssp -F[matrix.mtx] -S[source vertex]\n");
 
     printf("Starting [%s]\n", argv[0]);
     int ii = 0;
@@ -211,11 +211,13 @@ int main(int argc, char **argv)
     check_status(nvgraphAllocateVertexData(handle, graph, vertex_numsets, vertex_dimT));
     check_status(nvgraphAllocateEdgeData(handle, graph, edge_numsets, &edge_dimT));
     check_status(nvgraphSetEdgeData(handle, graph, (void *)weights_h, 0));
-
+    int sssp_index = 0;
     printf("Starting sssp from vertex %d\n", source_vert);
     double start_kernel = second();
-    check_status(nvgraphSssp(handle, graph, 0, &source_vert, 0));
+    check_status(nvgraphSssp(handle, graph, 0, &source_vert, sssp_index));
+    check_status(nvgraphGetVertexData(handle, graph, (void *)sssp_1_h, 0));
     double end_kernel = second();
+    printf("sssp_index = %d\n", sssp_index);
     fprintf(stdout, "sssp kernel done, time(ms) = %10.8f\n", (end_kernel - start_kernel) * 1000);
 
     // Solve with another source
@@ -225,7 +227,6 @@ int main(int argc, char **argv)
 
     // Get and print result
 
-    // check_status(nvgraphGetVertexData(handle, graph, (void *)sssp_1_h, 0));
     // expect sssp_1_h = (0.000000 0.500000 0.500000 1.333333 0.833333 1.333333)^T
     // printf("sssp_1_h\n");
     // for (i = 0; i < n; i++)

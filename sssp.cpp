@@ -40,16 +40,13 @@ int main(int argc, char **argv)
 
     int symmetrize = 0;
     int debug = 0;
-    int maxit = 1;
-    double tol = 0.0000001;
-    double damping = 0.85;
-    const int vertex_numsets = 2, edge_numsets = 1;
     int source_vert = 0;
     printf("WARNING: it is assumed that the matrices are stores in Matrix Market format with double as elementtype\n Usage: ./sssp -F[matrix.mtx] -S[source vertex]\n");
 
     printf("Starting [%s]\n", argv[0]);
     int ii = 0;
     int temp_argc = argc;
+    int base = 1;
     while (argc)
     {
         if (*argv[ii] == '-')
@@ -61,6 +58,8 @@ int main(int argc, char **argv)
                 break;
             case 'S':
                 source_vert = atoi(argv[ii] + 2);
+            case 'B':
+                base = atoi(argv[ii] + 2);
             case 'D':
                 debug = 1;
                 break;
@@ -133,7 +132,6 @@ int main(int argc, char **argv)
         weights[i] = (T)Aval[i];
     }
 
-    int base = indices[0];
     if (base)
     {
         for (int i = 0; i <= n; i++)
@@ -152,6 +150,7 @@ int main(int argc, char **argv)
     }
     printf("^^^^ base=%d, M=%d, N=%d, nnz=%d\n", base, m, n, nnz);
 
+    const size_t vertex_numsets = 2, edge_numsets = 1;
     int i, *destination_offsets_h, *source_indices_h;
     float *weights_h, *sssp_1_h, *sssp_2_h;
     void **vertex_dim;
@@ -184,9 +183,9 @@ int main(int argc, char **argv)
     }
 
     // Init host data
-    destination_offsets_h = indptr;
-    source_indices_h = indices;
-    weights_h = weights;
+    destination_offsets_h = (int *)malloc((n + 1) * sizeof(int));
+    source_indices_h = (int *)malloc(nnz * sizeof(int));
+    weights_h = (float *)malloc(nnz * sizeof(float));
     sssp_1_h = (float *)malloc(n * sizeof(float));
     sssp_2_h = (float *)malloc(n * sizeof(float));
     vertex_dim = (void **)malloc(vertex_numsets * sizeof(void *));
@@ -197,6 +196,51 @@ int main(int argc, char **argv)
     vertex_dim[1] = (void *)sssp_2_h;
     vertex_dimT[0] = CUDA_R_32F;
     vertex_dimT[1] = CUDA_R_32F;
+
+    for (int i = 0; i < nnz; i++)
+    {
+        weights_h[i] = 1.0;
+    }
+
+    // weights_h [0] = 0.333333;
+    // weights_h [1] = 0.500000;
+    // weights_h [2] = 0.333333;
+    // weights_h [3] = 0.500000;
+    // weights_h [4] = 0.500000;
+    // weights_h [5] = 1.000000;
+    // weights_h [6] = 0.333333;
+    // weights_h [7] = 0.500000;
+    // weights_h [8] = 0.500000;
+    // weights_h [9] = 0.500000;
+
+    for (int i = 0; i <= n; i++)
+    {
+        destination_offsets_h[i] = indptr[i];
+    }
+
+    // destination_offsets_h [0] = 0;
+    // destination_offsets_h [1] = 1;
+    // destination_offsets_h [2] = 3;
+    // destination_offsets_h [3] = 4;
+    // destination_offsets_h [4] = 6;
+    // destination_offsets_h [5] = 8;
+    // destination_offsets_h [6] = 10;
+
+    for (int i = 0; i < nnz; i++)
+    {
+        source_indices_h[i] = indices[i];
+    }
+
+    // source_indices_h [0] = 2;
+    // source_indices_h [1] = 0;
+    // source_indices_h [2] = 2;
+    // source_indices_h [3] = 0;
+    // source_indices_h [4] = 4;
+    // source_indices_h [5] = 5;
+    // source_indices_h [6] = 2;
+    // source_indices_h [7] = 3;
+    // source_indices_h [8] = 3;
+    // source_indices_h [9] = 4;
 
     check_status(nvgraphCreate(&handle));
     check_status(nvgraphCreateGraphDescr(handle, &graph));
@@ -211,36 +255,26 @@ int main(int argc, char **argv)
     check_status(nvgraphAllocateVertexData(handle, graph, vertex_numsets, vertex_dimT));
     check_status(nvgraphAllocateEdgeData(handle, graph, edge_numsets, &edge_dimT));
     check_status(nvgraphSetEdgeData(handle, graph, (void *)weights_h, 0));
-    int sssp_index = 0;
-    printf("Starting sssp from vertex %d\n", source_vert);
+
+    // Solve
+    printf("Starting nvgraphSssp from source_vert = %d\n", source_vert);
     double start_kernel = second();
-    check_status(nvgraphSssp(handle, graph, 0, &source_vert, sssp_index));
+    check_status(nvgraphSssp(handle, graph, 0, &source_vert, 0));
     check_status(nvgraphGetVertexData(handle, graph, (void *)sssp_1_h, 0));
     double end_kernel = second();
-    printf("sssp_index = %d\n", sssp_index);
     fprintf(stdout, "sssp kernel done, time(ms) = %10.8f\n", (end_kernel - start_kernel) * 1000);
-
-    // Solve with another source
-    // source_vert = 5;
-
-    // check_status(nvgraphSssp(handle, graph, 0, &source_vert, 1));
-
-    // Get and print result
-
-    // expect sssp_1_h = (0.000000 0.500000 0.500000 1.333333 0.833333 1.333333)^T
-    // printf("sssp_1_h\n");
-    // for (i = 0; i < n; i++)
-    //     printf("%f\n", sssp_1_h[i]);
-    // printf("\n");
-    // printf("\nDone!\n");
-
-    // check_status(nvgraphGetVertexData(handle, graph, (void *)sssp_2_h, 1));
-    // expect sssp_2_h = (FLT_MAX FLT_MAX FLT_MAX 1.000000 1.500000 0.000000 )^T
-    // printf("sssp_2_h\n");
-    // for (i = 0; i < n; i++)
-    //     printf("%f\n", sssp_2_h[i]);
-    // printf("\n");
-    printf("\nDone!\n");
+    double maxDist = 0.0;
+    for (i = 0; i < n; i++)
+    {
+        double dist = sssp_1_h[i];
+        if (dist > maxDist){
+            if (dist < 1000.0)
+            {
+                maxDist = dist;
+            }
+        }
+    }
+    printf("max distance = %d\n", (int)maxDist);
 
     free(destination_offsets_h);
     free(source_indices_h);

@@ -277,7 +277,7 @@ endif
 # Target rules
 all: build
 
-build: pagerank
+build: sssp
 
 check.deps:
 ifeq ($(SAMPLE_ENABLED),0)
@@ -289,19 +289,19 @@ endif
 mmio.c.o:mmio.c
 	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
-pagerank.o:pagerank.cpp
+sssp.o:sssp.cpp
 	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
-pagerank: mmio.c.o pagerank.o
+sssp: mmio.c.o sssp.o
 	$(EXEC) $(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $+ $(LIBRARIES)
 	$(EXEC) mkdir -p ../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
 	$(EXEC) cp $@ ../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
 
 run: build
-	$(EXEC) ./pagerank
+	$(EXEC) ./sssp
 
 clean:
-	rm -f pagerank mmio.c.o pagerank.o
-	rm -rf ../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)/pagerank
+	rm -f sssp mmio.c.o sssp.o
+	rm -rf ../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)/sssp
 
 clobber: clean

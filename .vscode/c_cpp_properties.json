@@ -5,8 +5,8 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/include/",
-                "/home/tianzhao/micro_benchmark/BiCGStab_sample/common/inc",
-                "/usr/local/cuda-10.1/include"
+                "../../common/inc",
+                "/usr/local/cuda/include"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",

@@ -478,7 +478,7 @@ int test_bicgstab(char *matrix_filename, char *coloring_filename,
 
     /* run the test */
     num_iterations = 1; //10;
-    start = second() / num_iterations;
+    start = second();
     for (count = 0; count < num_iterations; count++)
     {
 
@@ -490,7 +490,10 @@ int test_bicgstab(char *matrix_filename, char *coloring_filename,
 
         checkCudaErrors(cudaDeviceSynchronize());
     }
-    stop = second() / num_iterations;
+    stop = second();
+    printf("CUSPARSE iterators");
+    fprintf(stdout, "count = %3d\n", num_iterations);
+    fprintf(stdout, "time(ns) = %10.8f \n", (stop - start)*1E9);
 
     /* destroy the analysis info (for lower and upper triangular factors) */
     checkCudaErrors(cusparseDestroySolveAnalysisInfo(info_l));

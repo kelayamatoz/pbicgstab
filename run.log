@@ -1,0 +1,39 @@
+WARNING: it is assumed that the matrices are stores in Matrix Market format with double as elementtype
+ Usage: ./BiCGStab -F[matrix.mtx] [-E] [-D]
+Starting [./bin/x86_64/linux/release/BiCGStab]
+Using input file [../asplos21_baselines/data/bcsstk30.mtx]
+GPU Device 0: "Tesla V100-SXM2-16GB" with compute capability 7.0
+
+Testing dbicgstab
+^^^^ M=28924, N=28924, nnz=2043492
+Copy matrix from CPU to GPU, time(s) = 0.00334787
+analysis lower 0.328189 (s), upper 0.322796 (s) 
+CUSPARSE csrilu0 time(s) = 1.35603690 
+CUSPARSE iteratorscount =   1
+time(ns) = 424146.65222168 
+WARNING: it is assumed that the matrices are stores in Matrix Market format with double as elementtype
+ Usage: ./BiCGStab -F[matrix.mtx] [-E] [-D]
+Starting [./bin/x86_64/linux/release/BiCGStab]
+Using input file [../asplos21_baselines/data/ckt11752_dc_1.mtx]
+GPU Device 0: "Tesla V100-SXM2-16GB" with compute capability 7.0
+
+Testing dbicgstab
+^^^^ M=49702, N=49702, nnz=333029
+Copy matrix from CPU to GPU, time(s) = 0.00079608
+analysis lower 0.079056 (s), upper 0.077251 (s) 
+CUSPARSE csrilu0 time(s) = 0.00271010 
+CUSPARSE iteratorscount =   1
+time(ns) = 1088142.39501953 
+WARNING: it is assumed that the matrices are stores in Matrix Market format with double as elementtype
+ Usage: ./BiCGStab -F[matrix.mtx] [-E] [-D]
+Starting [./bin/x86_64/linux/release/BiCGStab]
+Using input file [../asplos21_baselines/data/Trefethen_20000.mtx]
+GPU Device 0: "Tesla V100-SXM2-16GB" with compute capability 7.0
+
+Testing dbicgstab
+^^^^ M=20000, N=20000, nnz=287233
+Copy matrix from CPU to GPU, time(s) = 0.00076199
+analysis lower 0.187576 (s), upper 0.005146 (s) 
+CUSPARSE csrilu0 time(s) = 0.31431985 
+CUSPARSE iteratorscount =   1
+time(ns) = 292062.75939941 

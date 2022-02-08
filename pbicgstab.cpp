@@ -75,6 +75,7 @@ static void gpu_pbicgstab(cublasHandle_t cublasHandle, cusparseHandle_t cusparse
                           double *f, double *r, double *rw, double *p, double *pw, double *s, double *t, double *v, double *x, 
                           int maxit, double tol, double ttt_sv)
 {
+assert(false);
     double rho, rhop, beta, alpha, negalpha, omega, negomega, temp, temp2;
     double nrmr, nrmr0;
     rho = 0.0;
